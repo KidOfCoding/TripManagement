@@ -4,7 +4,7 @@ import { connectDB } from "./config/db.js";
 import "dotenv/config";
 
 // 🔹 IMPORT ROUTES
-import authRoutes from "./routes/Auth.route.js";
+
 import tripRoutes from "./routes/Trip.route.js";
 
 // app configurations
@@ -28,7 +28,7 @@ app.get("/", (req, res) => {
 });
 
 // 🔥 API ROUTES
-app.use("/api/auth", authRoutes);
+
 app.use("/api/trips", tripRoutes);
 
 // server start
