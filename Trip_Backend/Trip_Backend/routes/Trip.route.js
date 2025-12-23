@@ -9,7 +9,8 @@ import {
   getTripStats,
   getDuplicateTrips,
   getPeopleStats,
-  deleteTrip
+  deleteTrip,
+  getTripReport
 } from "../controllers/Trip.controller.js";
 
 const router = express.Router();
@@ -21,6 +22,7 @@ router.post("/", createTrip);
 router.get("/stats", getTripStats);
 router.get("/duplicates", getDuplicateTrips);
 router.get("/people", getPeopleStats);
+router.get("/report", getTripReport);
 
 /* Get trips
    - ALL       → GET /api/trips

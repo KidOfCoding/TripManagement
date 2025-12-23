@@ -6,9 +6,7 @@ export const ThemeProvider = ({ children }) => {
     // Check local storage or system preference
     const [theme, setTheme] = useState(() => {
         if (typeof window !== "undefined") {
-            const storedTheme = localStorage.getItem("theme");
-            if (storedTheme) return storedTheme;
-            return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+            return localStorage.getItem("theme") || "light";
         }
         return "light";
     });

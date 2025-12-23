@@ -2,99 +2,163 @@ import { useEffect, useState } from "react";
 import api from "../api/axios";
 
 export default function StatsModal({ onClose }) {
-    const [activeTab, setActiveTab] = useState("today"); // today, week, month
-    const [stats, setStats] = useState(null);
-    const [loading, setLoading] = useState(true);
+    const [activeTab, setActiveTab] = useState("today"); // today, week, month, custom
+    const [customDate, setCustomDate] = useState("");
+    const [data, setData] = useState(null);
+    const [loading, setLoading] = useState(false);
 
     useEffect(() => {
-        fetchStats();
-    }, []);
+        fetchReport();
+    }, [activeTab, customDate]);
 
-    const fetchStats = async () => {
+    const fetchReport = async () => {
+        setLoading(true);
         try {
-            const res = await api.get("/trips/stats");
-            setStats(res.data.stats);
-            setLoading(false);
+            let startDate = new Date();
+            let endDate = new Date();
+
+            if (activeTab === "today") {
+                // defaults are fine
+            } else if (activeTab === "week") {
+                startDate.setDate(startDate.getDate() - 7);
+            } else if (activeTab === "month") {
+                startDate.setMonth(startDate.getMonth() - 1);
+            } else if (activeTab === "custom") {
+                if (!customDate) { setLoading(false); return; }
+                startDate = new Date(customDate);
+                endDate = new Date(customDate);
+            }
+
+            const res = await api.get(`/trips/report?startDate=${startDate.toISOString()}&endDate=${endDate.toISOString()}`);
+            setData(res.data);
         } catch (err) {
-            alert("Failed to load stats");
-            onClose();
+            console.error(err);
+        } finally {
+            setLoading(false);
         }
     };
 
-    if (loading) return <div className="fixed inset-0 bg-white/60 flex items-center justify-center z-50">Loading...</div>;
-
-    const currentStats = stats ? stats[activeTab] : {};
-
     return (
         <div className="fixed inset-0 bg-white/60 dark:bg-slate-900/80 backdrop-blur-sm z-50 overflow-y-auto animate-in fade-in duration-200">
-
             {/* HEADER */}
-            <div className="sticky top-0 bg-white dark:bg-slate-900 border-b border-slate-100 dark:border-slate-800 px-6 py-4 flex justify-between items-center z-10">
+            <div className="sticky top-0 bg-white dark:bg-slate-900 border-b border-slate-100 dark:border-slate-800 px-6 py-4 flex justify-between items-center z-10 w-full max-w-4xl mx-auto shadow-sm">
                 <div>
-                    <h2 className="text-xl sm:text-2xl font-bold text-slate-900 dark:text-white">Track Expenses</h2>
-                    <p className="text-sm text-slate-400 dark:text-slate-500">Overview of earnings and costs</p>
+                    <h2 className="text-xl sm:text-2xl font-bold text-slate-900 dark:text-white">Detailed Expense Report</h2>
+                    <p className="text-sm text-slate-400 dark:text-slate-500">Breakdown of deals, costs, and profits</p>
                 </div>
                 <button onClick={onClose} className="p-2 bg-slate-50 dark:bg-slate-800 text-slate-800 dark:text-slate-200 rounded-full hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors">
                     ✕
                 </button>
             </div>
 
-            <div className="max-w-md mx-auto p-6 space-y-8 bg-white dark:bg-slate-900 min-h-screen">
+            <div className="max-w-4xl mx-auto p-4 sm:p-6 bg-white dark:bg-slate-900 min-h-screen">
 
-                {/* TABS */}
-                <div className="flex bg-slate-100 dark:bg-slate-800 p-1 rounded-xl">
+                {/* FILTERS */}
+                <div className="flex flex-wrap gap-2 mb-6">
                     {["today", "week", "month"].map((tab) => (
                         <button
                             key={tab}
-                            onClick={() => setActiveTab(tab)}
-                            className={`flex-1 py-2 text-sm font-bold capitalize rounded-lg transition-all ${activeTab === tab
-                                ? "bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-sm"
-                                : "text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300"
+                            onClick={() => { setActiveTab(tab); setCustomDate(""); }}
+                            className={`px-4 py-2 text-sm font-bold capitalize rounded-lg transition-all border ${activeTab === tab
+                                ? "bg-slate-900 dark:bg-white text-white dark:text-slate-900 border-slate-900 dark:border-white"
+                                : "bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-400 border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700"
                                 }`}
                         >
                             {tab}
                         </button>
                     ))}
+                    <div className="flex items-center gap-2">
+                        <span className="text-sm font-medium text-slate-500 dark:text-slate-400">Date:</span>
+                        <input
+                            type="date"
+                            value={customDate}
+                            onChange={(e) => { setActiveTab("custom"); setCustomDate(e.target.value); }}
+                            className="bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-blue-500"
+                        />
+                    </div>
                 </div>
 
-                {/* MAIN STATS CARDS */}
-                <div className="grid grid-cols-2 gap-4">
-
-                    {/* PROFIT (Full Width) */}
-                    <div className="col-span-2 bg-gradient-to-br from-slate-900 to-slate-800 dark:from-slate-800 dark:to-slate-900 text-white p-6 rounded-2xl shadow-xl shadow-slate-900/20 dark:shadow-black/40 border border-slate-800 dark:border-slate-700">
-                        <p className="text-slate-400 text-sm font-medium uppercase tracking-wider mb-1">Net Profit</p>
-                        <h3 className="text-4xl font-bold">₹{currentStats.totalProfit || 0}</h3>
-                        <div className="mt-4 flex items-center gap-2 text-xs text-slate-400">
-                            <span className="bg-white/10 px-2 py-0.5 rounded text-white font-bold">{currentStats.count || 0} Trips</span>
-                            <span>completed this {activeTab}</span>
+                {loading ? (
+                    <div className="text-center py-20 text-slate-400">Loading report...</div>
+                ) : (
+                    <>
+                        {/* SUMMARY CARDS */}
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
+                            <div className="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-xl border border-blue-100 dark:border-blue-800">
+                                <p className="text-xs font-bold text-blue-600 dark:text-blue-400 uppercase">Total Deals</p>
+                                <p className="text-2xl font-bold text-blue-700 dark:text-blue-300">₹{data?.totals?.totalDeals || 0}</p>
+                            </div>
+                            <div className="bg-rose-50 dark:bg-rose-900/20 p-4 rounded-xl border border-rose-100 dark:border-rose-800">
+                                <p className="text-xs font-bold text-rose-600 dark:text-rose-400 uppercase">Total Expenses</p>
+                                <p className="text-2xl font-bold text-rose-700 dark:text-rose-300">₹{data?.totals?.totalCost || 0}</p>
+                            </div>
+                            <div className="bg-emerald-50 dark:bg-emerald-900/20 p-4 rounded-xl border border-emerald-100 dark:border-emerald-800">
+                                <p className="text-xs font-bold text-emerald-600 dark:text-emerald-400 uppercase">Net Profit</p>
+                                <p className="text-2xl font-bold text-emerald-700 dark:text-emerald-300">₹{data?.totals?.netProfit || 0}</p>
+                            </div>
                         </div>
-                    </div>
 
-                    {/* INCOME */}
-                    <div className="bg-emerald-50 dark:bg-emerald-900/20 p-5 rounded-2xl border border-emerald-100 dark:border-emerald-900/50">
-                        <p className="text-emerald-600/70 dark:text-emerald-400/70 text-xs font-bold uppercase tracking-wider mb-1">Total Income</p>
-                        <h3 className="text-2xl font-bold text-emerald-700 dark:text-emerald-400">₹{currentStats.totalCustomerPay || 0}</h3>
-                        <p className="text-[10px] text-emerald-600 dark:text-emerald-500 mt-1">From Customers</p>
-                    </div>
-
-                    {/* EXPENSE */}
-                    <div className="bg-rose-50 dark:bg-rose-900/20 p-5 rounded-2xl border border-rose-100 dark:border-rose-900/50">
-                        <p className="text-rose-600/70 dark:text-rose-400/70 text-xs font-bold uppercase tracking-wider mb-1">Total Expense</p>
-                        <h3 className="text-2xl font-bold text-rose-700 dark:text-rose-400">₹{currentStats.totalDriverPay || 0}</h3>
-                        <p className="text-[10px] text-rose-600 dark:text-rose-500 mt-1">Paid to Drivers</p>
-                    </div>
-
-                </div>
-
-                {/* INSIGHTS (Placeholder for future) */}
-                <div className="bg-slate-50 dark:bg-slate-800/50 rounded-xl p-4 border border-slate-100 dark:border-slate-700 text-center">
-                    <p className="text-sm text-slate-500 dark:text-slate-400">
-                        You have completed <strong className="text-slate-900 dark:text-slate-200">{currentStats.count || 0} trips</strong> in this period.
-                    </p>
-                </div>
-
+                        {/* DETAILED TABLE */}
+                        <div className="overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm">
+                            <table className="w-full text-left text-sm">
+                                <thead className="bg-slate-50 dark:bg-slate-800 text-slate-500 dark:text-slate-400 font-medium border-b border-slate-200 dark:border-slate-700">
+                                    <tr>
+                                        <th className="px-4 py-3">Date</th>
+                                        <th className="px-4 py-3">Route</th>
+                                        <th className="px-4 py-3">Parties</th>
+                                        <th className="px-4 py-3 text-right">Deal</th>
+                                        <th className="px-4 py-3 text-right">Cost</th>
+                                        <th className="px-4 py-3 text-right">Profit</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                                    {data?.trips?.length > 0 ? (
+                                        data.trips.map((trip) => (
+                                            <tr key={trip._id} className="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
+                                                <td className="px-4 py-3 text-slate-500 dark:text-slate-400 whitespace-nowrap">
+                                                    {new Date(trip.createdAt).toLocaleDateString()}
+                                                </td>
+                                                <td className="px-4 py-3 font-medium text-slate-700 dark:text-slate-200">
+                                                    {trip.route.source} ➝ {trip.route.destination}
+                                                </td>
+                                                <td className="px-4 py-3 text-slate-500 dark:text-slate-400 text-xs">
+                                                    <div className="flex flex-col">
+                                                        <span>👤 {trip.customerId?.name}</span>
+                                                        <span>🚗 {trip.driverId?.name}</span>
+                                                    </div>
+                                                </td>
+                                                <td className="px-4 py-3 text-right font-medium text-slate-700 dark:text-slate-200">
+                                                    ₹{trip.amounts.customerPaid}
+                                                </td>
+                                                <td className="px-4 py-3 text-right text-rose-600 dark:text-rose-400">
+                                                    ₹{trip.amounts.driverPaid}
+                                                </td>
+                                                <td className="px-4 py-3 text-right font-bold text-emerald-600 dark:text-emerald-400">
+                                                    ₹{trip.profit}
+                                                </td>
+                                            </tr>
+                                        ))
+                                    ) : (
+                                        <tr>
+                                            <td colSpan="6" className="px-4 py-10 text-center text-slate-400">
+                                                No trips found for this period
+                                            </td>
+                                        </tr>
+                                    )}
+                                </tbody>
+                                <tfoot className="bg-slate-50 dark:bg-slate-800 font-bold text-slate-900 dark:text-white border-t border-slate-200 dark:border-slate-700">
+                                    <tr>
+                                        <td colSpan="3" className="px-4 py-3 text-right uppercase text-xs tracking-wider text-slate-500">Totals</td>
+                                        <td className="px-4 py-3 text-right">₹{data?.totals?.totalDeals || 0}</td>
+                                        <td className="px-4 py-3 text-right text-rose-600 dark:text-rose-400">₹{data?.totals?.totalCost || 0}</td>
+                                        <td className="px-4 py-3 text-right text-emerald-600 dark:text-emerald-400">₹{data?.totals?.netProfit || 0}</td>
+                                    </tr>
+                                </tfoot>
+                            </table>
+                        </div>
+                    </>
+                )}
             </div>
-
         </div>
     );
 }

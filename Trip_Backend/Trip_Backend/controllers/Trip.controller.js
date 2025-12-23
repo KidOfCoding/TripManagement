@@ -399,3 +399,57 @@ export const getPeopleStats = async (req, res) => {
     res.status(500).json({ message: err.message });
   }
 };
+
+/* 📋 GET DETAILED TRIP REPORT */
+export const getTripReport = async (req, res) => {
+  try {
+    const { startDate, endDate } = req.query;
+
+    // Default to today if no dates provided
+    let queryStart = new Date();
+    queryStart.setHours(0, 0, 0, 0);
+
+    let queryEnd = new Date();
+    queryEnd.setHours(23, 59, 59, 999);
+
+    if (startDate) {
+      queryStart = new Date(startDate);
+      queryStart.setHours(0, 0, 0, 0);
+    }
+
+    if (endDate) {
+      queryEnd = new Date(endDate);
+      queryEnd.setHours(23, 59, 59, 999);
+    } else if (startDate) {
+      // If only start date is provided, default end date to end of that day
+      queryEnd = new Date(startDate);
+      queryEnd.setHours(23, 59, 59, 999);
+    }
+
+    const trips = await Trip.find({
+      createdAt: { $gte: queryStart, $lte: queryEnd },
+      "status.tripStatus": "done" // Only completed trips for reports? Or all? User likely wants accounting so 'done' makes sense, but let's include all for now or filters.
+      // User request: "track expenses" -> usually implies actual money flow, so 'done' is safer, but let's stick to 'done' for accuracy or maybe all but show status.
+      // Let's filter for DONE trips for financial reports to be accurate.
+    })
+      .populate("driverId", "name")
+      .populate("customerId", "name")
+      .sort({ createdAt: -1 });
+
+    // Calculate totals
+    const totals = trips.reduce((acc, trip) => {
+      acc.totalDeals += trip.amounts.customerPaid || 0;
+      acc.totalCost += trip.amounts.driverPaid || 0;
+      acc.netProfit += trip.profit || 0;
+      return acc;
+    }, { totalDeals: 0, totalCost: 0, netProfit: 0 });
+
+    res.json({
+      success: true,
+      trips,
+      totals
+    });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+};
