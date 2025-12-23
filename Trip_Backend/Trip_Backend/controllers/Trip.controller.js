@@ -2,43 +2,49 @@ import Trip from "../models/Trip.model.js";
 import Customer from "../models/Customer.model.js";
 import Driver from "../models/Driver.model.js";
 
+/* Helper to get User Filter */
+const getUserFilter = (req) => {
+  const { userId } = req.auth || {};
+  if (!userId) throw new Error("Unauthorized");
+  return { userId };
+};
+
 /* CREATE TRIP (FROM FULL FORM DATA) */
 export const createTrip = async (req, res) => {
   try {
-    const {
-      driver,
-      customer,
-      trip
-    } = req.body;
+    const { driver, customer, trip } = req.body;
+    const { userId } = req.auth;
 
-    /* 1️⃣ FIND OR CREATE DRIVER */
-    let driverDoc = await Driver.findOne({ contactNo: driver.contactNo });
+    if (!userId) return res.status(401).json({ message: "Unauthorized" });
 
+    /* 1️⃣ FIND OR CREATE DRIVER (Scoped to User) */
+    let driverDoc = await Driver.findOne({ contactNo: driver.contactNo, userId });
     if (!driverDoc) {
       driverDoc = await Driver.create({
         name: driver.name,
-        contactNo: driver.contactNo
+        contactNo: driver.contactNo,
+        userId
       });
     }
-    console.log("Driver", driverDoc);
 
-    /* 2️⃣ FIND OR CREATE CUSTOMER */
-    let customerDoc = await Customer.findOne({ contactNo: customer.contactNo });
+    /* 2️⃣ FIND OR CREATE CUSTOMER (Scoped to User) */
+    let customerDoc = await Customer.findOne({ contactNo: customer.contactNo, userId });
     if (!customerDoc) {
       customerDoc = await Customer.create({
         name: customer.name,
         contactNo: customer.contactNo,
-        address: customer.address
+        address: customer.address,
+        userId
       });
     }
-    console.log("Customer", customerDoc);
 
     /* 3️⃣ CHECK EXISTING ONGOING TRIP */
     const existingTrip = await Trip.findOne({
       customerId: customerDoc._id,
       "route.source": trip.source,
       "route.destination": trip.destination,
-      "status.tripStatus": "ongoing"
+      "status.tripStatus": "ongoing",
+      userId
     });
 
     if (existingTrip) {
@@ -48,31 +54,24 @@ export const createTrip = async (req, res) => {
         trip: existingTrip
       });
     }
-    console.log("Existing:", existingTrip);
 
     /* 4️⃣ CREATE NEW TRIP */
     const newTrip = await Trip.create({
       driverId: driverDoc._id,
       customerId: customerDoc._id,
-
+      userId,
       route: {
         source: trip.source,
         destination: trip.destination
       },
-
       car: trip.car,
-
       amounts: {
         customerPaid: customer.moneyIn,
         driverPaid: driver.moneyOut
       },
-
-      status: {
-        tripStatus: trip.status || "ongoing"
-      },
+      status: { tripStatus: trip.status || "ongoing" },
       profit: customer.moneyIn - driver.moneyOut
     });
-    console.log("NewOne", newTrip);
 
     res.status(201).json({
       success: true,
@@ -89,10 +88,8 @@ export const createTrip = async (req, res) => {
 export const getTrips = async (req, res) => {
   try {
     const { status } = req.query;
+    const filter = getUserFilter(req);
 
-    const filter = {};
-
-    // Apply status filter only if provided
     if (status && ["ongoing", "done"].includes(status)) {
       filter["status.tripStatus"] = status;
     }
@@ -111,92 +108,66 @@ export const getTrips = async (req, res) => {
     res.status(500).json({ message: err.message });
   }
 };
+
 export const completeTrip = async (req, res) => {
   try {
     const { id } = req.params;
+    const filter = { _id: id, ...getUserFilter(req) };
 
-    const trip = await Trip.findByIdAndUpdate(
-      id,
-      {
-        "status.tripStatus": "done"
-      },
+    const trip = await Trip.findOneAndUpdate(
+      filter,
+      { "status.tripStatus": "done" },
       { new: true }
     )
       .populate("driverId", "name contactNo")
       .populate("customerId", "name contactNo address");
 
-    if (!trip) {
-      return res.status(404).json({ message: "Trip not found" });
-    }
+    if (!trip) return res.status(404).json({ message: "Trip not found" });
 
-    res.json({
-      success: true,
-      message: "Trip marked as completed",
-      trip
-    });
+    res.json({ success: true, message: "Trip completed", trip });
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
 };
+
 export const reopenTrip = async (req, res) => {
   try {
     const { id } = req.params;
+    const filter = { _id: id, ...getUserFilter(req) };
 
-    const trip = await Trip.findByIdAndUpdate(
-      id,
-      {
-        "status.tripStatus": "ongoing"
-      },
+    const trip = await Trip.findOneAndUpdate(
+      filter,
+      { "status.tripStatus": "ongoing" },
       { new: true }
     )
       .populate("driverId", "name contactNo")
       .populate("customerId", "name contactNo address");
 
-    if (!trip) {
-      return res.status(404).json({ message: "Trip not found" });
-    }
+    if (!trip) return res.status(404).json({ message: "Trip not found" });
 
-    res.json({
-      success: true,
-      message: "Trip reopened successfully",
-      trip
-    });
+    res.json({ success: true, message: "Trip reopened", trip });
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
 };
+
 export const updatePayment = async (req, res) => {
   try {
     const { id } = req.params;
     const { customerPaid, driverPaid } = req.body;
+    const filter = { _id: id, ...getUserFilter(req) };
 
     const updateData = {};
+    if (typeof customerPaid === "boolean") updateData["status.customerPaid"] = customerPaid;
+    if (typeof driverPaid === "boolean") updateData["status.driverPaid"] = driverPaid;
 
-    if (typeof customerPaid === "boolean") {
-      updateData["status.customerPaid"] = customerPaid;
-    }
-
-    if (typeof driverPaid === "boolean") {
-      updateData["status.driverPaid"] = driverPaid;
-    }
-
-    const trip = await Trip.findByIdAndUpdate(
-      id,
-      { $set: updateData },
-      { new: true }
-    )
+    const trip = await Trip.findOneAndUpdate(filter, { $set: updateData }, { new: true })
       .populate("driverId", "name contactNo")
       .populate("customerId", "name contactNo address");
 
-    if (!trip) {
-      return res.status(404).json({ message: "Trip not found" });
-    }
+    if (!trip) return res.status(404).json({ message: "Trip not found" });
 
-    res.json({
-      success: true,
-      message: "Payment status updated",
-      trip
-    });
+    res.json({ success: true, message: "Payment updated", trip });
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
@@ -206,19 +177,24 @@ export const updateTrip = async (req, res) => {
   try {
     const { id } = req.params;
     const { driver, customer, trip } = req.body;
+    const { userId } = req.auth; // bypass not supported for edit logic yet to keep strict
 
-    // update driver
+    // Ensure trip exists and belongs to user
+    const existingTrip = await Trip.findOne({ _id: id, userId });
+    if (!existingTrip) return res.status(404).json({ message: "Trip not found" });
+
+    // Update Driver (find by ID or contact)
     const driverDoc = await Driver.findOneAndUpdate(
-      { contactNo: driver.contactNo },
+      { contactNo: driver.contactNo, userId },
       { name: driver.name },
-      { new: true }
+      { new: true, upsert: true } // Upsert just in case
     );
 
-    // update customer
+    // Update Customer
     const customerDoc = await Customer.findOneAndUpdate(
-      { contactNo: customer.contactNo },
+      { contactNo: customer.contactNo, userId },
       { name: customer.name, address: customer.address },
-      { new: true }
+      { new: true, upsert: true }
     );
 
     const updatedTrip = await Trip.findByIdAndUpdate(
@@ -226,10 +202,8 @@ export const updateTrip = async (req, res) => {
       {
         driverId: driverDoc._id,
         customerId: customerDoc._id,
-        route: {
-          source: trip.source,
-          destination: trip.destination
-        },
+        "route.source": trip.source,
+        "route.destination": trip.destination,
         car: trip.car,
         amounts: {
           customerPaid: customer.moneyIn,
@@ -242,41 +216,37 @@ export const updateTrip = async (req, res) => {
       .populate("driverId", "name contactNo")
       .populate("customerId", "name contactNo address");
 
-    res.json({
-      success: true,
-      message: "Trip updated successfully",
-      trip: updatedTrip
-    });
+    res.json({ success: true, message: "Trip updated", trip: updatedTrip });
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
 };
 
-
-/* 🗑️ DELETE TRIP */
 export const deleteTrip = async (req, res) => {
   try {
     const { id } = req.params;
-    await Trip.findByIdAndDelete(id);
-    res.json({ success: true, message: "Trip deleted successfully" });
+    const filter = { _id: id, ...getUserFilter(req) };
+    const trip = await Trip.findOneAndDelete(filter);
+
+    if (!trip) return res.status(404).json({ message: "Trip not found" });
+    res.json({ success: true, message: "Trip deleted" });
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
 };
 
-/* 📊 GET STATS (TODAY, WEEK, MONTH) */
+/* 📊 GET STATS */
 export const getTripStats = async (req, res) => {
   try {
+    const userFilter = getUserFilter(req);
     const today = new Date();
     today.setHours(0, 0, 0, 0);
-
     const startOfWeek = new Date(today);
     startOfWeek.setDate(today.getDate() - today.getDay());
-
     const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
 
     const getAggregation = (startDate) => [
-      { $match: { createdAt: { $gte: startDate }, "status.tripStatus": "done" } },
+      { $match: { ...userFilter, createdAt: { $gte: startDate }, "status.tripStatus": "done" } },
       {
         $group: {
           _id: null,
@@ -307,10 +277,12 @@ export const getTripStats = async (req, res) => {
   }
 };
 
-/* 🕵️ GET DUPLICATE TRIPS */
+/* 🕵️ DUPLICATES */
 export const getDuplicateTrips = async (req, res) => {
   try {
+    const userFilter = getUserFilter(req);
     const duplicates = await Trip.aggregate([
+      { $match: userFilter }, // Filter first
       {
         $group: {
           _id: {
@@ -318,50 +290,52 @@ export const getDuplicateTrips = async (req, res) => {
             destination: "$route.destination",
             customerId: "$customerId",
             amount: "$amounts.customerPaid"
-            // We group by these fields to find potential duplicates
           },
           trips: { $push: "$$ROOT" },
           count: { $sum: 1 }
         }
       },
-      {
-        $match: {
-          count: { $gt: 1 } // Only return groups with more than 1 trip
-        }
-      }
+      { $match: { count: { $gt: 1 } } }
     ]);
 
-    // Populate driver and customer details for easier reading
     const populatedDuplicates = await Trip.populate(duplicates, [
       { path: "trips.driverId", select: "name" },
       { path: "trips.customerId", select: "name" }
     ]);
 
-    res.json({
-      success: true,
-      duplicates: populatedDuplicates
-    });
+    res.json({ success: true, duplicates: populatedDuplicates });
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
 };
 
-/* 👥 GET PEOPLE DIRECTORY (Drivers & Customers with Stats) */
+/* 👥 PEOPLE STATS */
 export const getPeopleStats = async (req, res) => {
   try {
+    const userFilter = getUserFilter(req); // { userId: "..." } or {}
+
+    // Drivers
     const drivers = await Driver.aggregate([
+      { $match: userFilter },
       {
         $lookup: {
           from: "trips",
-          localField: "_id",
-          foreignField: "driverId",
+          let: { driverId: "$_id" },
+          pipeline: [
+            {
+              $match: {
+                $expr: { $eq: ["$driverId", "$$driverId"] }
+                // implicitly trips should also match userId if strict, but driver match implies it mostly. 
+                // Better to be safe? 
+              }
+            }
+          ],
           as: "trips"
         }
       },
       {
         $project: {
-          name: 1,
-          contactNo: 1,
+          name: 1, contactNo: 1,
           totalTrips: { $size: "$trips" },
           totalEarned: { $sum: "$trips.amounts.driverPaid" }
         }
@@ -369,7 +343,9 @@ export const getPeopleStats = async (req, res) => {
       { $sort: { totalEarned: -1 } }
     ]);
 
+    // Customers
     const customers = await Customer.aggregate([
+      { $match: userFilter },
       {
         $lookup: {
           from: "trips",
@@ -380,9 +356,7 @@ export const getPeopleStats = async (req, res) => {
       },
       {
         $project: {
-          name: 1,
-          contactNo: 1,
-          address: 1,
+          name: 1, contactNo: 1, address: 1,
           totalTrips: { $size: "$trips" },
           totalSpent: { $sum: "$trips.amounts.customerPaid" }
         }
@@ -390,53 +364,33 @@ export const getPeopleStats = async (req, res) => {
       { $sort: { totalSpent: -1 } }
     ]);
 
-    res.json({
-      success: true,
-      drivers,
-      customers
-    });
+    res.json({ success: true, drivers, customers });
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
 };
 
-/* 📋 GET DETAILED TRIP REPORT */
+/* 📋 TRIP REPORT */
 export const getTripReport = async (req, res) => {
   try {
     const { startDate, endDate } = req.query;
+    const filter = getUserFilter(req);
 
-    // Default to today if no dates provided
-    let queryStart = new Date();
-    queryStart.setHours(0, 0, 0, 0);
+    let queryStart = new Date(); queryStart.setHours(0, 0, 0, 0);
+    let queryEnd = new Date(); queryEnd.setHours(23, 59, 59, 999);
 
-    let queryEnd = new Date();
-    queryEnd.setHours(23, 59, 59, 999);
+    if (startDate) { queryStart = new Date(startDate); queryStart.setHours(0, 0, 0, 0); }
+    if (endDate) { queryEnd = new Date(endDate); queryEnd.setHours(23, 59, 59, 999); }
+    else if (startDate) { queryEnd = new Date(startDate); queryEnd.setHours(23, 59, 59, 999); }
 
-    if (startDate) {
-      queryStart = new Date(startDate);
-      queryStart.setHours(0, 0, 0, 0);
-    }
+    filter.createdAt = { $gte: queryStart, $lte: queryEnd };
+    filter["status.tripStatus"] = "done";
 
-    if (endDate) {
-      queryEnd = new Date(endDate);
-      queryEnd.setHours(23, 59, 59, 999);
-    } else if (startDate) {
-      // If only start date is provided, default end date to end of that day
-      queryEnd = new Date(startDate);
-      queryEnd.setHours(23, 59, 59, 999);
-    }
-
-    const trips = await Trip.find({
-      createdAt: { $gte: queryStart, $lte: queryEnd },
-      "status.tripStatus": "done" // Only completed trips for reports? Or all? User likely wants accounting so 'done' makes sense, but let's include all for now or filters.
-      // User request: "track expenses" -> usually implies actual money flow, so 'done' is safer, but let's stick to 'done' for accuracy or maybe all but show status.
-      // Let's filter for DONE trips for financial reports to be accurate.
-    })
+    const trips = await Trip.find(filter)
       .populate("driverId", "name")
       .populate("customerId", "name")
       .sort({ createdAt: -1 });
 
-    // Calculate totals
     const totals = trips.reduce((acc, trip) => {
       acc.totalDeals += trip.amounts.customerPaid || 0;
       acc.totalCost += trip.amounts.driverPaid || 0;
@@ -444,11 +398,7 @@ export const getTripReport = async (req, res) => {
       return acc;
     }, { totalDeals: 0, totalCost: 0, netProfit: 0 });
 
-    res.json({
-      success: true,
-      trips,
-      totals
-    });
+    res.json({ success: true, trips, totals });
   } catch (err) {
     res.status(500).json({ message: err.message });
   }

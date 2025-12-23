@@ -8,10 +8,16 @@ const api = axios.create({
 });
 
 // Attach token automatically
-// api.interceptors.request.use((config) => {
-//   const token = localStorage.getItem("token");
-//   if (token) config.headers.Authorization = `Bearer ${token}`;
-//   return config;
-// });
+api.interceptors.request.use(async (config) => {
+  try {
+    const token = await window.Clerk?.session?.getToken();
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`;
+    }
+  } catch (error) {
+    console.error("Token Error", error);
+  }
+  return config;
+});
 
 export default api;

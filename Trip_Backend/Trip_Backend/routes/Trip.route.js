@@ -12,8 +12,11 @@ import {
   deleteTrip,
   getTripReport
 } from "../controllers/Trip.controller.js";
+import { authMiddleware } from "../middleware/auth.js";
 
 const router = express.Router();
+
+router.use(authMiddleware);
 
 /* Create new trip (from full form data) */
 router.post("/", createTrip);

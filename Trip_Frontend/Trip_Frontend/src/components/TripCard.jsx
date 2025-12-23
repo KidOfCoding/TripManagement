@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import api from "../api/axios";
 
 // Icons
@@ -10,6 +10,24 @@ const ChevronDown = ({ className }) => (<svg className={className} fill="none" s
 
 export default function TripCard({ trip, refresh, onEdit }) {
   const [expanded, setExpanded] = useState(false);
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const closeMenu = (e) => {
+      const menu = document.getElementById(`status-menu-${trip._id}`);
+      if (menu && !menu.contains(e.target) && !e.target.closest(`button[onclick*='status-menu-${trip._id}']`)) {
+        // Logic handled by button click e.stopPropagation, but for global we can just hide all menus if needed.
+        // Simpler: Just rely on onBlur or similar if we used actual focus.
+        // For now, let's just make sure clicking existing card collapses it? No.
+        // Let's stick to the inline toggle logic.
+      }
+    };
+    window.addEventListener('click', () => {
+      const menu = document.getElementById(`status-menu-${trip._id}`);
+      if (menu) menu.classList.add("hidden");
+    });
+    return () => window.removeEventListener('click', null);
+  }, []);
 
   const markDone = async () => {
     await api.patch(`/trips/${trip._id}/complete`);
@@ -56,12 +74,55 @@ export default function TripCard({ trip, refresh, onEdit }) {
               </p>
             </div>
 
-            <div className="flex items-center gap-2">
-              {isOngoing ? (
-                <span className="bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wide">Ongoing</span>
-              ) : (
-                <span className="bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400 px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wide">Done</span>
-              )}
+            {/* Status Toggle Dropdown */}
+            <div className="relative z-20">
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  const menu = document.getElementById(`status-menu-${trip._id}`);
+                  if (menu) menu.classList.toggle("hidden");
+                }}
+                className={`flex items-center gap-1.5 px-2 py-1 rounded-md text-[10px] font-bold uppercase tracking-wide transition-all ${isOngoing
+                  ? "bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 hover:bg-green-200 dark:hover:bg-green-900/50"
+                  : "bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400 hover:bg-red-200 dark:hover:bg-red-900/50"
+                  }`}
+              >
+                <span className={`w-1.5 h-1.5 rounded-full ${isOngoing ? "bg-green-500 animate-pulse" : "bg-red-500"}`}></span>
+                {isOngoing ? "Ongoing" : "Completed"}
+                <ChevronDown className="w-3 h-3 opacity-50" />
+              </button>
+
+              {/* Dropdown Menu */}
+              <div
+                id={`status-menu-${trip._id}`}
+                className="hidden absolute right-0 top-full mt-1 w-32 bg-white dark:bg-slate-800 rounded-lg shadow-xl border border-slate-100 dark:border-slate-700 overflow-hidden animate-in fade-in zoom-in-95 duration-100 origin-top-right"
+              >
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    document.getElementById(`status-menu-${trip._id}`).classList.add("hidden");
+                    isOngoing ? markDone() : reopen();
+                  }}
+                  className={`w-full text-left px-3 py-2 text-xs font-semibold flex items-center gap-2 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors ${isOngoing ? "text-green-600 dark:text-green-400" : "text-blue-600 dark:text-blue-400"
+                    }`}
+                >
+                  {isOngoing ? (
+                    <>
+                      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" /></svg>
+                      Completed
+                    </>
+                  ) : (
+                    <>
+                      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
+                      Reopen
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+
+            {/* Expand chevron (independent) */}
+            <div onClick={() => setExpanded(!expanded)} className="p-1 cursor-pointer">
               <ChevronDown className={`w-4 h-4 text-slate-300 dark:text-slate-600 transition-transform duration-300 ${expanded ? 'rotate-180' : ''}`} />
             </div>
           </div>
@@ -109,7 +170,7 @@ export default function TripCard({ trip, refresh, onEdit }) {
               {isOngoing ? (
                 <span className="ml-2 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 px-2 py-0.5 rounded text-[10px] font-bold uppercase">Ongoing</span>
               ) : (
-                <span className="ml-2 bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400 px-2 py-0.5 rounded text-[10px] font-bold uppercase">Done</span>
+                <span className="ml-2 bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400 px-2 py-0.5 rounded text-[10px] font-bold uppercase">Completed</span>
               )}
             </p>
 

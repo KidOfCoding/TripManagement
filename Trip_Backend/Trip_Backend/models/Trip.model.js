@@ -16,6 +16,12 @@ const tripSchema = new mongoose.Schema(
       index: true
     },
 
+    userId: {
+      type: String, // Clerk User ID
+      required: true,
+      index: true
+    },
+
     route: {
       source: { type: String, required: true },
       destination: { type: String, required: true }
@@ -40,9 +46,9 @@ const tripSchema = new mongoose.Schema(
       },
       customerPaid: { type: Boolean, default: false },
       driverPaid: { type: Boolean, default: false },
-      profit:{
-         type:Number,
-         require:true
+      profit: {
+        type: Number,
+        require: true
       }
     }
   },

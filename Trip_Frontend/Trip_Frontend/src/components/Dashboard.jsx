@@ -7,6 +7,7 @@ import StatsModal from "./StatsModal";
 import PeopleDirectory from "./PeopleDirectory";
 import DuplicateTripsModal from "./DuplicateTripsModal";
 import ThemeToggle from "./ThemeToggle";
+import { UserButton } from "@clerk/clerk-react";
 
 const PlusIcon = () => (
   <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className="w-6 h-6">
@@ -73,8 +74,8 @@ export default function Dashboard({ user }) {
           </div>
           <div className="flex items-center gap-3">
             <ThemeToggle />
-            <div className="h-10 w-10 rounded-full bg-gradient-to-br from-blue-100 to-purple-100 dark:from-slate-800 dark:to-slate-700 flex items-center justify-center text-blue-700 dark:text-blue-300 font-bold border border-white dark:border-slate-700 shadow-sm ring-2 ring-blue-50 dark:ring-slate-800">
-              {user.name ? user.name[0].toUpperCase() : 'U'}
+            <div className="h-10 w-10 flex items-center justify-center">
+              <UserButton afterSignOutUrl="/" />
             </div>
           </div>
         </div>
@@ -117,7 +118,7 @@ export default function Dashboard({ user }) {
                 : "bg-white text-slate-600 border border-slate-200 hover:bg-slate-50"
                 }`}
             >
-              {s.charAt(0).toUpperCase() + s.slice(1)}
+              {s === "done" ? "Completed" : s.charAt(0).toUpperCase() + s.slice(1)}
             </button>
           ))}
         </div>

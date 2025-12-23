@@ -10,8 +10,13 @@ const customerSchema = new mongoose.Schema(
 
     contactNo: {
       type: String,
+      required: true
+    },
+
+    userId: {
+      type: String,
       required: true,
-      unique: true
+      index: true
     },
 
     address: {
@@ -21,5 +26,8 @@ const customerSchema = new mongoose.Schema(
   },
   { timestamps: true }
 );
+
+// Ensure contactNo is unique per user
+customerSchema.index({ contactNo: 1, userId: 1 }, { unique: true });
 
 export default mongoose.model("Customer", customerSchema);
