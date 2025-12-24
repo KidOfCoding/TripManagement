@@ -150,6 +150,19 @@ export default function Dashboard({ user }) {
             ))
           )}
         </div>
+
+        {/* DEVELOPER SIGNATURE */}
+        <div className="mt-12 mb-6 text-center animate-in fade-in duration-700">
+          <p className="text-xs text-slate-400 dark:text-slate-500 font-medium tracking-wide">
+            Designed & Developed by
+          </p>
+          <p className="text-sm font-bold text-slate-600 dark:text-slate-300 mt-1">
+            Debasish Dash
+          </p>
+          <p className="text-[10px] text-slate-400 dark:text-slate-600 mt-2">
+            Need Help? <a href="mailto:contact@example.com" className="text-blue-500 hover:text-blue-600 hover:underline transition-colors">debasishdash2616@gmail.com</a>
+          </p>
+        </div>
       </div>
 
       {/* FAB (Floating Action Button) - EXTENDED FOR CLARITY */}
