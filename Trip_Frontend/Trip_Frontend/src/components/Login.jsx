@@ -20,6 +20,7 @@ export default function Login({ onLogin, onSwitch }) {
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-900 to-slate-700">
       <div className="bg-white rounded-xl p-8 w-[420px]">
+        <h2>testing phase</h2>
         <h2 className="text-2xl font-bold text-center mb-2">
           Welcome Back
         </h2>
