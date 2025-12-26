@@ -22,18 +22,70 @@ const tripSchema = new mongoose.Schema(
       index: true
     },
 
+    tripNo: { type: Number, required: true }, // Auto-increment (Scoped to user)
+
+    serviceType: {
+      type: String,
+      enum: ["cab_with_driver", "driver_only"],
+      default: "cab_with_driver"
+    },
+
+    tripType: {
+      type: String,
+      enum: ["single", "multi"],
+      default: "single"
+    },
+
     route: {
       source: { type: String, required: true },
-      destination: { type: String, required: true }
+      destination: { type: String, required: true },
+      fromAddress: String,
+      toAddress: String,
+      // Enhanced for Multi-Destination with Expenses
+      stops: [{
+        location: String,
+        expenses: [{
+          type: String, // Toll, Parking, Food
+          amount: Number
+        }]
+      }]
     },
 
-    car: {
-      type: String
-    },
+    distanceKM: Number,
 
+    car: { type: String },
+
+    /* Financials */
     amounts: {
-      customerPaid: { type: Number, required: true },
-      driverPaid: { type: Number, required: true }
+      customerPaid: { type: Number, required: true }, // Total Deal Value
+      driverPaid: { type: Number, required: true }    // Total Driver Cost
+    },
+
+    advancePayment: {
+      amount: { type: Number, default: 0 },
+      voucherNo: String,
+      date: Date,
+      mode: { type: String, enum: ["cash", "online", "check"] }
+    },
+
+    /* Journey Details */
+    intermediateStays: [{
+      location: String,
+      durationMin: Number
+    }],
+
+    /* Global Trip Expenses (if any not tied to specific stops) */
+    closingExpenses: [{
+      expenseType: { type: String, default: "Fuel" },
+      amount: { type: Number, default: 0 }
+    }],
+
+    /* Final Payment (Settlement) */
+    paymentDetails: {
+      mode: { type: String, enum: ["cash", "online", "check"] },
+      voucherNo: String,
+      amount: Number, // Final amount collected/paid
+      notes: String
     },
 
     profit: Number,
@@ -45,11 +97,7 @@ const tripSchema = new mongoose.Schema(
         default: "ongoing"
       },
       customerPaid: { type: Boolean, default: false },
-      driverPaid: { type: Boolean, default: false },
-      profit: {
-        type: Number,
-        require: true
-      }
+      driverPaid: { type: Boolean, default: false }
     }
   },
   { timestamps: true }

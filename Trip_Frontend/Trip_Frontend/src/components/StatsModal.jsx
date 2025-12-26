@@ -1,11 +1,18 @@
 import { useEffect, useState } from "react";
 import api from "../api/axios";
+import TripCard from "./TripCard";
+import EditTripModal from "./EditTripModal";
 
 export default function StatsModal({ onClose }) {
     const [activeTab, setActiveTab] = useState("today"); // today, week, month, custom
     const [customDate, setCustomDate] = useState("");
     const [data, setData] = useState(null);
     const [loading, setLoading] = useState(false);
+
+    // View Details State
+    const [selectedTrip, setSelectedTrip] = useState(null);
+    // Edit State (passed to TripCard)
+    const [editingTrip, setEditingTrip] = useState(null);
 
     useEffect(() => {
         fetchReport();
@@ -39,7 +46,7 @@ export default function StatsModal({ onClose }) {
     };
 
     return (
-        <div className="fixed inset-0 bg-white/60 dark:bg-slate-900/80 backdrop-blur-sm z-50 overflow-y-auto animate-in fade-in duration-200">
+        <div className="fixed inset-0 bg-white/60 dark:bg-slate-900/80 backdrop-blur-sm z-30 overflow-y-auto animate-in fade-in duration-200">
             {/* HEADER */}
             <div className="sticky top-0 bg-white dark:bg-slate-900 border-b border-slate-100 dark:border-slate-800 px-6 py-4 flex justify-between items-center z-10 w-full max-w-4xl mx-auto shadow-sm">
                 <div>
@@ -111,10 +118,14 @@ export default function StatsModal({ onClose }) {
                                         <th className="px-4 py-3 text-right">Profit</th>
                                     </tr>
                                 </thead>
-                                <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                                <tbody className="divide-y divide-slate-100 dark:divide-slate-800 cursor-pointer">
                                     {data?.trips?.length > 0 ? (
                                         data.trips.map((trip) => (
-                                            <tr key={trip._id} className="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
+                                            <tr
+                                                key={trip._id}
+                                                onClick={() => setSelectedTrip(trip)}
+                                                className="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors active:bg-slate-100 dark:active:bg-slate-800"
+                                            >
                                                 <td className="px-4 py-3 text-slate-500 dark:text-slate-400 whitespace-nowrap">
                                                     {new Date(trip.createdAt).toLocaleDateString()}
                                                 </td>
@@ -159,6 +170,42 @@ export default function StatsModal({ onClose }) {
                     </>
                 )}
             </div>
+
+            {/* TRIP DETAIL POPUP */}
+            {selectedTrip && (
+                <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[60] flex items-center justify-center p-4 animate-in fade-in duration-200" onClick={() => setSelectedTrip(null)}>
+                    <div className="w-full max-w-lg bg-white dark:bg-slate-800 rounded-2xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200" onClick={e => e.stopPropagation()}>
+                        <div className="p-4 bg-slate-50 dark:bg-slate-800 border-b border-slate-100 dark:border-slate-700 flex justify-between items-center">
+                            <h3 className="font-bold text-lg dark:text-white">Trip Details</h3>
+                            <button onClick={() => setSelectedTrip(null)} className="p-2 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-full transition-colors">✕</button>
+                        </div>
+                        <div className="p-4 max-h-[80vh] overflow-y-auto">
+                            <TripCard
+                                trip={selectedTrip}
+                                defaultExpanded={true}
+                                refresh={() => { fetchReport(); setSelectedTrip(null); }}
+                                onEdit={(t) => {
+                                    setEditingTrip(t);
+                                    // Don't close selectedTrip yet, let EditModal handle it
+                                }}
+                            />
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* EDIT MODAL OVERLAY */}
+            {editingTrip && (
+                <EditTripModal
+                    trip={editingTrip}
+                    onClose={() => setEditingTrip(null)}
+                    refresh={() => {
+                        fetchReport();
+                        setEditingTrip(null);
+                        setSelectedTrip(null); // Close detail view after edit to avoid stale data
+                    }}
+                />
+            )}
         </div>
     );
 }

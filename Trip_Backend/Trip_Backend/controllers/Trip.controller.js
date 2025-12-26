@@ -2,6 +2,8 @@ import Trip from "../models/Trip.model.js";
 import Customer from "../models/Customer.model.js";
 import Driver from "../models/Driver.model.js";
 
+import Counter from "../models/Counter.model.js";
+
 /* Helper to get User Filter */
 const getUserFilter = (req) => {
   const { userId } = req.auth || {};
@@ -38,39 +40,53 @@ export const createTrip = async (req, res) => {
       });
     }
 
-    /* 3️⃣ CHECK EXISTING ONGOING TRIP */
-    const existingTrip = await Trip.findOne({
-      customerId: customerDoc._id,
-      "route.source": trip.source,
-      "route.destination": trip.destination,
-      "status.tripStatus": "ongoing",
-      userId
-    });
-
-    if (existingTrip) {
-      return res.json({
-        success: true,
-        message: "Existing trip reused",
-        trip: existingTrip
-      });
-    }
+    /* 3️⃣ GET NEXT TRIP NO */
+    const counter = await Counter.findOneAndUpdate(
+      { userId },
+      { $inc: { seq: 1 } },
+      { new: true, upsert: true }
+    );
+    const nextTripNo = counter.seq;
 
     /* 4️⃣ CREATE NEW TRIP */
     const newTrip = await Trip.create({
+      userId,
+      tripNo: nextTripNo,
+
       driverId: driverDoc._id,
       customerId: customerDoc._id,
-      userId,
+
+      /* New Fields */
+      serviceType: trip.serviceType || "cab_with_driver",
+      tripType: trip.tripType || "single",
+      distanceKM: Number(trip.distanceKM) || 0,
+
       route: {
         source: trip.source,
-        destination: trip.destination
+        destination: trip.destination,
+        fromAddress: trip.fromAddress,
+        toAddress: trip.toAddress,
+        stops: trip.stops || []
       },
+
       car: trip.car,
+
       amounts: {
-        customerPaid: customer.moneyIn,
-        driverPaid: driver.moneyOut
+        customerPaid: Number(customer.moneyIn) || 0,
+        driverPaid: Number(driver.moneyOut) || 0
       },
+
+      /* Advance Payment Block */
+      advancePayment: {
+        amount: Number(customer.advancePayment?.amount) || 0,
+        voucherNo: customer.advancePayment?.voucherNo,
+        mode: customer.advancePayment?.mode || "cash",
+        date: new Date()
+      },
+
       status: { tripStatus: trip.status || "ongoing" },
-      profit: customer.moneyIn - driver.moneyOut
+
+      profit: (Number(customer.moneyIn) || 0) - (Number(driver.moneyOut) || 0)
     });
 
     res.status(201).json({
@@ -197,19 +213,67 @@ export const updateTrip = async (req, res) => {
       { new: true, upsert: true }
     );
 
+    // Determine Final Data (Use new if provided, else keep existing)
+    // We clone existing stops to ensure we can mutate safely if needed
+    let finalStops = trip.stops !== undefined
+      ? trip.stops
+      : (existingTrip.route.stops ? JSON.parse(JSON.stringify(existingTrip.route.stops)) : []);
+
+    const finalIntermediateStays = trip.intermediateStays !== undefined ? trip.intermediateStays : existingTrip.intermediateStays;
+    const finalPaymentDetails = trip.paymentDetails !== undefined ? trip.paymentDetails : existingTrip.paymentDetails;
+    const finalClosingExpenses = trip.closingExpenses !== undefined ? trip.closingExpenses : (existingTrip.closingExpenses || []);
+
+    // SYNC AUTO-FIX: If Destination is updated but Stops are NOT provided (e.g. Simple Edit Modal),
+    // update the last stop to match the new destination to keep data in sync.
+    if (trip.destination && trip.stops === undefined && finalStops.length > 0) {
+      finalStops[finalStops.length - 1].location = trip.destination;
+    }
+
+    // Calculate Total Expenses from Final Stops & Closing Expenses
+    const stopExpensesTotal = (finalStops || []).reduce((acc, stop) => {
+      const stopExpenses = stop.expenses || [];
+      return acc + stopExpenses.reduce((sum, exp) => sum + (Number(exp.amount) || 0), 0);
+    }, 0);
+
+    const closingExpensesTotal = (finalClosingExpenses || []).reduce((acc, exp) => acc + (Number(exp.amount) || 0), 0);
+
+    const totalExpenses = stopExpensesTotal + closingExpensesTotal;
+
     const updatedTrip = await Trip.findByIdAndUpdate(
       id,
       {
         driverId: driverDoc._id,
         customerId: customerDoc._id,
+
+        serviceType: trip.serviceType,
+        tripType: trip.tripType,
+        distanceKM: trip.distanceKM,
+
         "route.source": trip.source,
         "route.destination": trip.destination,
+        "route.fromAddress": trip.fromAddress,
+        "route.toAddress": trip.toAddress,
+        "route.stops": finalStops,
+
         car: trip.car,
+
         amounts: {
           customerPaid: customer.moneyIn,
           driverPaid: driver.moneyOut
         },
-        profit: customer.moneyIn - driver.moneyOut
+
+        advancePayment: customer.advancePayment,
+
+        /* New Fields for Closing (Protected) */
+        intermediateStays: finalIntermediateStays,
+        paymentDetails: finalPaymentDetails,
+        closingExpenses: finalClosingExpenses,
+
+        // Update Status if provided (Crucial for Closing Trip)
+        ...(trip.status && { "status.tripStatus": trip.status }),
+
+        // Profit = Deal - DriverCost - Expenses
+        profit: (Number(customer.moneyIn) || 0) - (Number(driver.moneyOut) || 0) - totalExpenses
       },
       { new: true }
     )
@@ -392,11 +456,16 @@ export const getTripReport = async (req, res) => {
       .sort({ createdAt: -1 });
 
     const totals = trips.reduce((acc, trip) => {
+      const tripExpenses = (trip.route.stops || []).reduce((sAcc, stop) => {
+        return sAcc + (stop.expenses || []).reduce((eAcc, exp) => eAcc + (Number(exp.amount) || 0), 0);
+      }, 0);
+
       acc.totalDeals += trip.amounts.customerPaid || 0;
       acc.totalCost += trip.amounts.driverPaid || 0;
+      acc.totalExpenses += tripExpenses;
       acc.netProfit += trip.profit || 0;
       return acc;
-    }, { totalDeals: 0, totalCost: 0, netProfit: 0 });
+    }, { totalDeals: 0, totalCost: 0, totalExpenses: 0, netProfit: 0 });
 
     res.json({ success: true, trips, totals });
   } catch (err) {

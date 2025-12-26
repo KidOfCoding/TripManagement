@@ -10,20 +10,102 @@ export default function AddTripModal({ onClose, refresh }) {
   const [step, setStep] = useState(1);
   const [form, setForm] = useState({
     driver: { name: "", contactNo: "", moneyOut: "" },
-    customer: { name: "", contactNo: "", address: "", moneyIn: "" },
-    trip: { source: "", destination: "", car: "", status: "ongoing" }
+    customer: {
+      name: "",
+      contactNo: "",
+      address: "",
+      moneyIn: "",
+      advancePayment: { amount: "", voucherNo: "", mode: "cash" }
+    },
+    trip: {
+      source: "",
+      destination: "",
+      fromAddress: "",
+      toAddress: "",
+      car: "",
+      status: "ongoing",
+      serviceType: "cab_with_driver",
+      tripType: "single",
+      distanceKM: ""
+    }
   });
+
+  const [errors, setErrors] = useState({});
 
   const updateForm = (section, field, value) => {
     setForm(prev => ({
       ...prev,
       [section]: { ...prev[section], [field]: value }
     }));
+    // Clear error for this field
+    if (errors[`${section}.${field}`]) {
+      setErrors(prev => {
+        const newErrors = { ...prev };
+        delete newErrors[`${section}.${field}`];
+        return newErrors;
+      });
+    }
   };
 
+  const handleBlur = (section, field, value) => {
+    const newErrors = { ...errors };
+    let error = "";
+
+    if (field === "contactNo") {
+      if (!/^\d{10}$/.test(value)) error = "Must be exactly 10 digits";
+    } else if (["source", "destination", "name"].includes(field)) {
+      if (!value) error = `${field.charAt(0).toUpperCase() + field.slice(1)} is required`;
+    }
+
+    if (error) {
+      newErrors[`${section}.${field}`] = error;
+    } else {
+      delete newErrors[`${section}.${field}`];
+    }
+    setErrors(newErrors);
+  };
+
+  const validate = () => {
+    const newErrors = {};
+    if (!form.trip.source) newErrors['trip.source'] = "Source is required";
+    if (!form.trip.destination) newErrors['trip.destination'] = "Destination is required";
+    if (!form.customer.name) newErrors['customer.name'] = "Customer name is required";
+    if (!form.driver.name) newErrors['driver.name'] = "Driver name is required";
+
+    // Phone Validation
+    if (!/^\d{10}$/.test(form.customer.contactNo)) {
+      newErrors['customer.contactNo'] = "Must be exactly 10 digits";
+    }
+    if (!/^\d{10}$/.test(form.driver.contactNo)) {
+      newErrors['driver.contactNo'] = "Must be exactly 10 digits";
+    }
+
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
+  };
+
+  const [stops, setStops] = useState([]);
+
+  // ... (keep existing methods)
+
   const submit = async () => {
+    if (!validate()) return;
     try {
-      await api.post("/trips", form);
+      // Prepare stops for backend: Intermediates + Final Destination
+      const formattedStops = [
+        ...stops.map(s => ({ location: s, expenses: [] })),
+        { location: form.trip.destination, expenses: [] }
+      ];
+
+      const payload = {
+        ...form,
+        trip: {
+          ...form.trip,
+          stops: formattedStops
+        }
+      };
+
+      await api.post("/trips", payload);
       refresh();
       onClose();
     } catch (err) {
@@ -62,41 +144,138 @@ export default function AddTripModal({ onClose, refresh }) {
 
           {step === 1 && (
             <div className="space-y-4 animate-in fade-in slide-in-from-right-4 duration-300">
-              <h3 className="text-lg font-semibold text-slate-700 dark:text-slate-200 flex items-center gap-2">
-                <CarIcon /> Trip Details
-              </h3>
-
-              <div>
-                <label className="label-text dark:text-slate-400">Source Location</label>
-                <input
-                  className="input-field dark:bg-slate-800 dark:border-slate-700 dark:text-slate-100 dark:focus:border-blue-500"
-                  autoFocus
-                  placeholder="e.g. Airport"
-                  value={form.trip.source}
-                  onChange={(e) => updateForm('trip', 'source', e.target.value)}
-                />
+              {/* SERVICE TYPE */}
+              <div className="grid grid-cols-2 gap-3">
+                <button
+                  onClick={() => updateForm('trip', 'serviceType', 'cab_with_driver')}
+                  className={`p-3 rounded-xl border text-sm font-medium transition-all flex flex-col items-center gap-1 ${form.trip.serviceType === 'cab_with_driver'
+                    ? 'bg-blue-50 border-blue-500 text-blue-700 dark:bg-blue-900/20 dark:border-blue-500 dark:text-blue-400'
+                    : 'border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800'
+                    }`}
+                >
+                  <span className="text-xl">🚖</span>
+                  Cab + Driver
+                </button>
+                <button
+                  onClick={() => updateForm('trip', 'serviceType', 'driver_only')}
+                  className={`p-3 rounded-xl border text-sm font-medium transition-all flex flex-col items-center gap-1 ${form.trip.serviceType === 'driver_only'
+                    ? 'bg-blue-50 border-blue-500 text-blue-700 dark:bg-blue-900/20 dark:border-blue-500 dark:text-blue-400'
+                    : 'border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800'
+                    }`}
+                >
+                  <span className="text-xl">👮</span>
+                  Driver Only
+                </button>
               </div>
 
-              <div>
-                <label className="label-text dark:text-slate-400">Destination</label>
-                <input
-                  className="input-field dark:bg-slate-800 dark:border-slate-700 dark:text-slate-100 dark:focus:border-blue-500"
-                  placeholder="e.g. Hotel Grand"
-                  value={form.trip.destination}
-                  onChange={(e) => updateForm('trip', 'destination', e.target.value)}
-                />
+              {/* LOCATIONS */}
+              <div className="space-y-3">
+
+                {/* Source */}
+                <div>
+                  <label className="label-text dark:text-slate-400">Source <span className="text-red-500">*</span></label>
+                  <input
+                    className={`input-field w-full dark:bg-slate-800 dark:border-slate-700 dark:text-slate-100 ${errors['trip.source'] ? 'border-red-500 focus:border-red-500 dark:border-red-500' : ''}`}
+                    placeholder="e.g. Airport"
+                    value={form.trip.source}
+                    onChange={(e) => updateForm('trip', 'source', e.target.value)}
+                    onBlur={(e) => handleBlur('trip', 'source', e.target.value)}
+                  />
+                  {errors['trip.source'] && <p className="text-[10px] text-red-500 mt-1 font-medium">{errors['trip.source']}</p>}
+                </div>
+
+                {/* Intermediate Stops */}
+                {stops.map((stop, index) => (
+                  <div key={index} className="flex gap-2 items-end animate-in fade-in slide-in-from-top-2 duration-200">
+                    <div className="flex-1">
+                      <label className="label-text text-xs text-slate-400 dark:text-slate-500 mb-1">Stop {index + 1}</label>
+                      <input
+                        className="input-field w-full dark:bg-slate-800 dark:border-slate-700 dark:text-slate-100"
+                        placeholder={`Stop ${index + 1} location`}
+                        value={stop}
+                        onChange={(e) => {
+                          const newStops = [...stops];
+                          newStops[index] = e.target.value;
+                          setStops(newStops);
+                        }}
+                      />
+                    </div>
+                    <button
+                      onClick={() => {
+                        setStops(stops.filter((_, i) => i !== index));
+                      }}
+                      className="p-3 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg border border-transparent hover:border-red-200 transition-all"
+                      title="Remove Stop"
+                    >
+                      ✕
+                    </button>
+                  </div>
+                ))}
+
+                {/* Add Stop Button */}
+                <div className="flex justify-end">
+                  <button
+                    onClick={() => setStops([...stops, ""])}
+                    className="text-xs font-medium text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 flex items-center gap-1 py-1 px-2 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded transition-all"
+                  >
+                    <span>+</span> Add Stop
+                  </button>
+                </div>
+
+                {/* Destination */}
+                <div>
+                  <label className="label-text dark:text-slate-400">Destination <span className="text-red-500">*</span></label>
+                  <input
+                    className={`input-field w-full dark:bg-slate-800 dark:border-slate-700 dark:text-slate-100 ${errors['trip.destination'] ? 'border-red-500 focus:border-red-500 dark:border-red-500' : ''}`}
+                    placeholder="e.g. Hotel Grand"
+                    value={form.trip.destination}
+                    onChange={(e) => updateForm('trip', 'destination', e.target.value)}
+                    onBlur={(e) => handleBlur('trip', 'destination', e.target.value)}
+                  />
+                  {errors['trip.destination'] && <p className="text-[10px] text-red-500 mt-1 font-medium">{errors['trip.destination']}</p>}
+                </div>
+
+                {/* Detailed Addresses */}
+                <div className="flex gap-2">
+                  <textarea
+                    className="input-field min-h-[60px] text-xs dark:bg-slate-800 dark:border-slate-700 dark:text-slate-100"
+                    placeholder="From Address (Detailed)"
+                    value={form.trip.fromAddress}
+                    onChange={(e) => updateForm('trip', 'fromAddress', e.target.value)}
+                  />
+                  <textarea
+                    className="input-field min-h-[60px] text-xs dark:bg-slate-800 dark:border-slate-700 dark:text-slate-100"
+                    placeholder="To Address (Detailed)"
+                    value={form.trip.toAddress}
+                    onChange={(e) => updateForm('trip', 'toAddress', e.target.value)}
+                  />
+                </div>
               </div>
 
-              <div>
-                <label className="label-text dark:text-slate-400">Car Number / Model (Optional)</label>
-                <input
-                  className="input-field dark:bg-slate-800 dark:border-slate-700 dark:text-slate-100 dark:focus:border-blue-500"
-                  placeholder="e.g. Toyota Innova"
-                  value={form.trip.car}
-                  onChange={(e) => updateForm('trip', 'car', e.target.value)}
-                />
+              {/* DISTANCE & CAR */}
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="label-text dark:text-slate-400">Distance (KM)</label>
+                  <input
+                    type="number"
+                    className="input-field dark:bg-slate-800 dark:border-slate-700 dark:text-slate-100"
+                    placeholder="0"
+                    value={form.trip.distanceKM}
+                    onChange={(e) => updateForm('trip', 'distanceKM', e.target.value)}
+                  />
+                </div>
+                <div>
+                  <label className="label-text dark:text-slate-400">Car Model</label>
+                  <input
+                    className="input-field dark:bg-slate-800 dark:border-slate-700 dark:text-slate-100"
+                    placeholder="e.g. Toyota"
+                    value={form.trip.car}
+                    onChange={(e) => updateForm('trip', 'car', e.target.value)}
+                  />
+                </div>
               </div>
             </div>
+
           )}
 
           {step === 2 && (
@@ -106,40 +285,37 @@ export default function AddTripModal({ onClose, refresh }) {
               </h3>
 
               <div>
-                <label className="label-text dark:text-slate-400">Customer Name</label>
+                <label className="label-text dark:text-slate-400">Customer Name <span className="text-red-500">*</span></label>
                 <input
-                  className="input-field dark:bg-slate-800 dark:border-slate-700 dark:text-slate-100 dark:focus:border-blue-500"
+                  className={`input-field dark:bg-slate-800 dark:border-slate-700 dark:text-slate-100 dark:focus:border-blue-500 ${errors['customer.name'] ? 'border-red-500 focus:border-red-500 dark:border-red-500' : ''
+                    }`}
                   autoFocus
                   placeholder="Name"
                   value={form.customer.name}
                   onChange={(e) => updateForm('customer', 'name', e.target.value)}
+                  onBlur={(e) => handleBlur('customer', 'name', e.target.value)}
                 />
+                {errors['customer.name'] && <p className="text-[10px] text-red-500 mt-1 font-medium">{errors['customer.name']}</p>}
               </div>
 
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="label-text dark:text-slate-400">Contact</label>
+                  <label className="label-text dark:text-slate-400">Contact (10 digits)</label>
                   <input
-                    className="input-field dark:bg-slate-800 dark:border-slate-700 dark:text-slate-100 dark:focus:border-blue-500"
+                    className={`input-field dark:bg-slate-800 dark:border-slate-700 dark:text-slate-100 dark:focus:border-blue-500 ${errors['customer.contactNo'] ? 'border-red-500 focus:border-red-500 dark:border-red-500' : ''
+                      }`}
                     type="tel"
                     placeholder="Mobile"
                     value={form.customer.contactNo}
-                    onChange={(e) => updateForm('customer', 'contactNo', e.target.value)}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      if (/^\d{0,10}$/.test(val)) updateForm('customer', 'contactNo', val);
+                    }}
+                    onBlur={(e) => handleBlur('customer', 'contactNo', e.target.value)}
                   />
+                  {errors['customer.contactNo'] && <p className="text-[10px] text-red-500 mt-1 font-medium">{errors['customer.contactNo']}</p>}
                 </div>
-                <div>
-                  <label className="label-text text-green-600 dark:text-green-400">Deal with Customer</label>
-                  <div className="relative">
-                    <span className="absolute left-4 top-3.5 text-slate-400">₹</span>
-                    <input
-                      className="input-field pl-8 border-green-100 focus:border-green-400 focus:ring-green-200 dark:bg-slate-800 dark:border-slate-700 dark:text-slate-100 dark:focus:border-green-500 dark:focus:ring-green-900/30"
-                      placeholder="0.00"
-                      type="number"
-                      value={form.customer.moneyIn}
-                      onChange={(e) => updateForm('customer', 'moneyIn', e.target.value)}
-                    />
-                  </div>
-                </div>
+                {/* Deal with Customer REMOVED as per request to move to closing */}
               </div>
 
               <div>
@@ -151,6 +327,9 @@ export default function AddTripModal({ onClose, refresh }) {
                   onChange={(e) => updateForm('customer', 'address', e.target.value)}
                 />
               </div>
+
+              {/* ADVANCE PAYMENT */}
+              {/* ADVANCE PAYMENT REMOVED as per request to move to closing */}
             </div>
           )}
 
@@ -161,40 +340,37 @@ export default function AddTripModal({ onClose, refresh }) {
               </h3>
 
               <div>
-                <label className="label-text dark:text-slate-400">Driver Name</label>
+                <label className="label-text dark:text-slate-400">Driver Name <span className="text-red-500">*</span></label>
                 <input
-                  className="input-field dark:bg-slate-800 dark:border-slate-700 dark:text-slate-100 dark:focus:border-blue-500"
+                  className={`input-field dark:bg-slate-800 dark:border-slate-700 dark:text-slate-100 dark:focus:border-blue-500 ${errors['driver.name'] ? 'border-red-500 focus:border-red-500 dark:border-red-500' : ''
+                    }`}
                   autoFocus
                   placeholder="Name"
                   value={form.driver.name}
                   onChange={(e) => updateForm('driver', 'name', e.target.value)}
+                  onBlur={(e) => handleBlur('driver', 'name', e.target.value)}
                 />
+                {errors['driver.name'] && <p className="text-[10px] text-red-500 mt-1 font-medium">{errors['driver.name']}</p>}
               </div>
 
               <div>
-                <label className="label-text dark:text-slate-400">Contact Number</label>
+                <label className="label-text dark:text-slate-400">Contact Number (10 digits)</label>
                 <input
-                  className="input-field dark:bg-slate-800 dark:border-slate-700 dark:text-slate-100 dark:focus:border-blue-500"
+                  className={`input-field dark:bg-slate-800 dark:border-slate-700 dark:text-slate-100 dark:focus:border-blue-500 ${errors['driver.contactNo'] ? 'border-red-500 focus:border-red-500 dark:border-red-500' : ''
+                    }`}
                   type="tel"
                   placeholder="10-digit number"
                   value={form.driver.contactNo}
-                  onChange={(e) => updateForm('driver', 'contactNo', e.target.value)}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    if (/^\d{0,10}$/.test(val)) updateForm('driver', 'contactNo', val);
+                  }}
+                  onBlur={(e) => handleBlur('driver', 'contactNo', e.target.value)}
                 />
+                {errors['driver.contactNo'] && <p className="text-[10px] text-red-500 mt-1 font-medium">{errors['driver.contactNo']}</p>}
               </div>
 
-              <div>
-                <label className="label-text text-red-500 dark:text-red-400">Payment to Driver</label>
-                <div className="relative">
-                  <span className="absolute left-4 top-3.5 text-slate-400">₹</span>
-                  <input
-                    className="input-field pl-8 border-red-100 focus:border-red-400 focus:ring-red-200 dark:bg-slate-800 dark:border-slate-700 dark:text-slate-100 dark:focus:border-red-500 dark:focus:ring-red-900/30"
-                    placeholder="0.00"
-                    type="number"
-                    value={form.driver.moneyOut}
-                    onChange={(e) => updateForm('driver', 'moneyOut', e.target.value)}
-                  />
-                </div>
-              </div>
+              {/* Payment to Driver REMOVED as per request to move to closing */}
             </div>
           )}
 
@@ -230,7 +406,7 @@ export default function AddTripModal({ onClose, refresh }) {
           )}
         </div>
 
-      </div>
-    </div>
+      </div >
+    </div >
   );
 }
