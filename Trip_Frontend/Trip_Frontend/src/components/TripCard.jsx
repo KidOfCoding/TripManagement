@@ -184,10 +184,10 @@ export default function TripCard({ trip, refresh, onEdit, defaultExpanded = fals
                     {trip.serviceType === 'driver_only' ? '👮' : '🚖'}
                   </span>
                 </div>
-                <div className="flex items-center gap-2 text-base font-bold text-slate-800 dark:text-slate-100">
-                  <span className="truncate max-w-[100px] sm:max-w-xs">{trip.route.source}</span>
+                <div className="flex flex-wrap items-center gap-2 text-base font-bold text-slate-800 dark:text-slate-100 pr-1">
+                  <span className="break-words line-clamp-2">{trip.route.source}</span>
                   <ArrowRight />
-                  <span className="truncate max-w-[100px] sm:max-w-xs">{trip.route.destination}</span>
+                  <span className="break-words line-clamp-2">{trip.route.destination}</span>
                 </div>
                 <p className="text-[10px] text-slate-400 dark:text-slate-500 font-medium mt-0.5">
                   {new Date(trip.createdAt).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
