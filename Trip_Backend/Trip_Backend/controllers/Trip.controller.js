@@ -15,7 +15,7 @@ const getUserFilter = (req) => {
 export const createTrip = async (req, res) => {
   try {
     const { driver, customer, trip } = req.body;
-    const { userId } = req.auth;
+    const { userId } = req.auth || {};
 
     if (!userId) return res.status(401).json({ message: "Unauthorized" });
 

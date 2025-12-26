@@ -275,31 +275,23 @@ export default function TripCard({ trip, refresh, onEdit, defaultExpanded = fals
             </div>
 
             {/* Bottom Row: Financials & Primary Action */}
-            <div className="flex flex-wrap items-center justify-between gap-3 mt-1">
+            <div className="flex items-center justify-between gap-2 mt-2">
               {/* Financials Pill */}
-              <div className="text-[11px] font-bold bg-slate-50 dark:bg-slate-700/50 px-3 py-2 rounded-lg border border-slate-100 dark:border-slate-700 flex flex-wrap gap-x-3 gap-y-1 items-center flex-1 min-w-fit">
-                <span className="text-green-700 dark:text-green-400 flex items-center gap-1">
+              <div className="text-[10px] sm:text-[11px] font-bold bg-slate-50 dark:bg-slate-700/50 px-2 sm:px-3 py-1.5 sm:py-2 rounded-lg border border-slate-100 dark:border-slate-700 flex flex-wrap gap-x-2 sm:gap-x-3 gap-y-1 items-center flex-1 min-w-0 mr-1">
+                <span className="text-green-700 dark:text-green-400 flex items-center gap-1 whitespace-nowrap">
                   <span className="text-slate-400 dark:text-slate-500 font-normal">Deal:</span> ₹{trip.amounts?.customerPaid || 0}
                 </span>
                 <span className="text-slate-300 dark:text-slate-600">|</span>
-                <span className="text-red-500 dark:text-red-400 flex items-center gap-1">
+                <span className="text-red-500 dark:text-red-400 flex items-center gap-1 whitespace-nowrap">
                   <span className="text-slate-400 dark:text-slate-500 font-normal">Cost:</span>
                   ₹{(trip.amounts?.driverPaid || 0) +
                     (trip.route.stops || []).reduce((sum, stop) => sum + (stop.expenses || []).reduce((exSum, exp) => exSum + (Number(exp.amount) || 0), 0), 0) +
                     (trip.closingExpenses || []).reduce((sum, exp) => sum + (Number(exp.amount) || 0), 0)}
                 </span>
                 <span className="text-slate-300 dark:text-slate-600">|</span>
-                <span className="text-emerald-700 dark:text-emerald-400 flex items-center gap-1">
+                <span className="text-emerald-700 dark:text-emerald-400 flex items-center gap-1 whitespace-nowrap">
                   <span className="text-slate-400 dark:text-slate-500 font-normal">Profit:</span> ₹{trip.profit || 0}
                 </span>
-                {trip.advancePayment?.amount > 0 && (
-                  <>
-                    <span className="text-slate-300 dark:text-slate-600">|</span>
-                    <span className="text-blue-600 dark:text-blue-400 flex items-center gap-1">
-                      <span className="text-slate-400 dark:text-slate-500 font-normal">Adv:</span> ₹{trip.advancePayment.amount}
-                    </span>
-                  </>
-                )}
               </div>
 
               {/* Primary Action Button (Bottom Right) */}
@@ -312,9 +304,9 @@ export default function TripCard({ trip, refresh, onEdit, defaultExpanded = fals
                     setShowClosingModal(true);
                   }
                 }}
-                className="bg-black text-white px-4 py-2 rounded-lg text-xs font-bold shadow-md hover:bg-gray-900 dark:bg-white dark:text-black dark:hover:bg-slate-200 transition-all z-20 shrink-0"
+                className="bg-black text-white px-3 py-2 rounded-lg text-[10px] sm:text-xs font-bold shadow-md hover:bg-gray-900 dark:bg-white dark:text-black dark:hover:bg-slate-200 transition-all shrink-0 whitespace-nowrap"
               >
-                {isOngoing ? "Close Trip" : "Edit Details"}
+                {isOngoing ? "Close" : "Edit"}
               </button>
             </div>
 
